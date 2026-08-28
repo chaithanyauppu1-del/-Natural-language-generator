@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Natural Language Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+
+        <header class="app-header">
+            <div class="header-brand">
+                <div class="logo-icon">⚡</div>
+                <div>
+                    <h1>Natural Language Generator</h1>
+                    <p class="subtitle">Pretrained FLAN-T5 Transformer Model for Natural Text Synthesis & Evaluation</p>
+                </div>
+            </div>
+            <div class="status-badge" id="systemStatus">
+                <span class="status-dot"></span>
+                <span id="statusText">Model: Loading...</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+
+            <section class="card input-card">
+                <div class="card-header">
+                    <h2>1. Generation Input & Parameters</h2>
+                    <div class="preset-selector">
+                        <label for="samplePresets">Sample Presets:</label>
+                        <select id="samplePresets">
+                            <option value="">-- Choose Example --</option>
+                            <option value="cs_dept">Structured: University CS Department</option>
+                            <option value="financial">Structured: Financial Summary</option>
+                            <option value="prompt_cs">Prompt: Formal CS Overview</option>
+                            <option value="prompt_product">Prompt: Tech Product Launch</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card-body">
+
+                    <div class="input-grid">
+                        <div class="form-group">
+                            <label for="promptText">
+                                Prompt / Task Instruction
+                                <span class="tooltip" data-tooltip="Natural language instruction guiding text generation">ℹ️</span>
+                            </label>
+                            <textarea id="promptText" rows="4" placeholder="e.g. Write a short formal description of a university computer science department."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="structuredData">
+                                Structured Data (Key-Value / CSV / JSON)
+                                <span class="tooltip" data-tooltip="Enter key-value pairs (e.g. Department: CS) to convert into coherent prose">ℹ️</span>
+                            </label>
+                            <textarea id="structuredData" rows="4" placeholder="Department: Computer Science&#10;Students: 120&#10;Average Attendance: 91%&#10;Pass Percentage: 94%&#10;Top Subject: Data Structures"></textarea>
+                        </div>
+                    </div>
+
+
+                    <div class="form-group">
+                        <label for="referenceText">
+                            Reference Text (Optional for ROUGE / BLEU Evaluation)
+                            <span class="tooltip" data-tooltip="Ground-truth text used to score generated text quality">ℹ️</span>
+                        </label>
+                        <textarea id="referenceText" rows="2" placeholder="Paste optional ground-truth reference text here to calculate automated ROUGE and BLEU scores..."></textarea>
+                    </div>
+
+
+                    <div class="form-group">
+                        <label>Generation Style</label>
+                        <div class="style-cards-grid">
+                            {% for key, style in styles.items() %}
+                            <div class="style-card {% if key == 'general' %}active{% endif %}" data-style="{{ key }}" tabindex="0" role="radio" aria-checked="{% if key == 'general' %}true{% else %}false{% endif %}">
+                                <div class="style-radio"></div>
+                                <div class="style-info">
+                                    <div class="style-title">{{ style.name }}</div>
+                                    <div class="style-desc">{{ style.description }}</div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+
+                    <details class="advanced-accordion">
+                        <summary class="accordion-header">
+                            <span>⚙️ Advanced Generation Parameters</span>
+                            <span class="chevron">▼</span>
+                        </summary>
+                        <div class="accordion-body params-grid">
+                            <div class="param-control">
+                                <div class="param-label">
+                                    <label for="maxTokens">Max New Tokens</label>
+                                    <span class="param-val" id="maxTokensVal">{{ defaults.max_new_tokens }}</span>
+                                </div>
+                                <input type="range" id="maxTokens" min="20" max="300" step="10" value="{{ defaults.max_new_tokens }}">
+                            </div>
+
+                            <div class="param-control">
+                                <div class="param-label">
+                                    <label for="numBeams">Beam Search Count</label>
+                                    <span class="param-val" id="numBeamsVal">{{ defaults.num_beams }}</span>
+                                </div>
+                                <input type="range" id="numBeams" min="1" max="8" step="1" value="{{ defaults.num_beams }}">
+                            </div>
+
+                            <div class="param-control">
+                                <div class="param-label">
+                                    <label for="temperature">Temperature</label>
+                                    <span class="param-val" id="tempVal">{{ defaults.temperature }}</span>
+                                </div>
+                                <input type="range" id="temperature" min="0.1" max="1.5" step="0.1" value="{{ defaults.temperature }}">
+                            </div>
+
+                            <div class="param-control">
+                                <div class="param-label">
+                                    <label for="repetitionPenalty">Repetition Penalty</label>
+                                    <span class="param-val" id="repVal">{{ defaults.repetition_penalty }}</span>
+                                </div>
+                                <input type="range" id="repetitionPenalty" min="1.0" max="2.0" step="0.1" value="{{ defaults.repetition_penalty }}">
+                            </div>
+                        </div>
+                    </details>
+
+
+                    <div class="action-bar">
+                        <button id="btnGenerate" class="btn btn-primary" type="button">
+                            <span class="btn-icon">⚡</span>
+                            <span class="btn-text">Generate Natural Text</span>
+                        </button>
+                        <button id="btnClear" class="btn btn-secondary" type="button">
+                            <span>Clear Input</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+
+            <div id="loadingIndicator" class="loading-container hidden">
+                <div class="spinner"></div>
+                <div class="loading-text">
+                    <h3>Generating Natural Language...</h3>
+                    <p>Executing FLAN-T5 beam search inference</p>
+                </div>
+            </div>
+
+
+            <section id="outputSection" class="card output-card hidden">
+                <div class="card-header">
+                    <h2>2. Generated Output & Evaluation</h2>
+                    <div class="output-meta">
+                        <span id="factCoverageBadge" class="badge hidden">Fact Coverage: 100%</span>
+                        <span id="genTimeBadge" class="badge">0.00s</span>
+                        <span id="modelBadge" class="badge badge-info">flan-t5-base</span>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <div class="output-text-box">
+                        <p id="generatedTextContent"></p>
+                    </div>
+
+
+                    <div class="output-actions">
+                        <button id="btnCopy" class="btn btn-sm btn-outline" type="button">
+                            📋 Copy Text
+                        </button>
+                        <button id="btnDownloadTxt" class="btn btn-sm btn-outline" type="button">
+                            💾 Download .TXT
+                        </button>
+                        <button id="btnDownloadJson" class="btn btn-sm btn-outline" type="button">
+                            📄 Download .JSON
+                        </button>
+                    </div>
+
+
+                    <div class="stats-container">
+                        <h3>Output Text Statistics</h3>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-value" id="statChars">0</div>
+                                <div class="stat-label">Characters</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="statWords">0</div>
+                                <div class="stat-label">Words</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="statSentences">0</div>
+                                <div class="stat-label">Sentences</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="statAvgWord">0</div>
+                                <div class="stat-label">Avg Word Length</div>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <div id="evaluationContainer" class="evaluation-container">
+
+                        <div id="noReferenceNotice" class="no-reference-callout hidden">
+                            <span class="callout-icon">ℹ️</span>
+                            <p>No reference text provided. ROUGE/BLEU evaluation is unavailable for this generation.</p>
+                        </div>
+
+
+                        <div id="evaluationPanel" class="hidden">
+                            <h3>Automated Evaluation Metrics (Reference Comparison)</h3>
+
+                            <div class="metrics-grid">
+
+                                <div class="metric-card">
+                                    <h4>ROUGE F1-Scores</h4>
+                                    <div class="metric-bar-group">
+                                        <div class="metric-line">
+                                            <span>ROUGE-1 (Unigram)</span>
+                                            <span id="valRouge1">0.0000</span>
+                                        </div>
+                                        <div class="bar-bg"><div id="barRouge1" class="bar-fill" style="width: 0%;"></div></div>
+
+                                        <div class="metric-line">
+                                            <span>ROUGE-2 (Bigram)</span>
+                                            <span id="valRouge2">0.0000</span>
+                                        </div>
+                                        <div class="bar-bg"><div id="barRouge2" class="bar-fill" style="width: 0%;"></div></div>
+
+                                        <div class="metric-line">
+                                            <span>ROUGE-L (LCS)</span>
+                                            <span id="valRougeL">0.0000</span>
+                                        </div>
+                                        <div class="bar-bg"><div id="barRougeL" class="bar-fill" style="width: 0%;"></div></div>
+                                    </div>
+                                </div>
+
+
+                                <div class="metric-card">
+                                    <h4>BLEU Scores</h4>
+                                    <div class="metric-bar-group">
+                                        <div class="metric-line">
+                                            <span>BLEU-1</span>
+                                            <span id="valBleu1">0.0000</span>
+                                        </div>
+                                        <div class="bar-bg"><div id="barBleu1" class="bar-fill" style="width: 0%;"></div></div>
+
+                                        <div class="metric-line">
+                                            <span>BLEU-2</span>
+                                            <span id="valBleu2">0.0000</span>
+                                        </div>
+                                        <div class="bar-bg"><div id="barBleu2" class="bar-fill" style="width: 0%;"></div></div>
+
+                                        <div class="metric-line">
+                                            <span>BLEU-3</span>
+                                            <span id="valBleu3">0.0000</span>
+                                        </div>
+                                        <div class="bar-bg"><div id="barBleu3" class="bar-fill" style="width: 0%;"></div></div>
+
+                                        <div class="metric-line">
+                                            <span>BLEU-4</span>
+                                            <span id="valBleu4">0.0000</span>
+                                        </div>
+                                        <div class="bar-bg"><div id="barBleu4" class="bar-fill" style="width: 0%;"></div></div>
+                                    </div>
+                                </div>
+                            </div>
+
+
+                            <div class="disclaimer-callout">
+                                <span class="callout-icon">ℹ️</span>
+                                <p id="evalDisclaimer">
+                                    Automated ROUGE and BLEU scores measure n-gram lexical overlap against the reference text. They assess surface similarity and do not represent perfect measures of semantic quality or human readability.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+            <section class="card history-card">
+                <div class="card-header">
+                    <h2>3. Session Generation History</h2>
+                    <button id="btnClearHistory" class="btn btn-sm btn-danger hidden" type="button">Clear History</button>
+                </div>
+                <div class="card-body">
+                    <div id="historyContainer" class="history-list">
+                        <div class="empty-msg">
+                            <strong>No generations yet.</strong>
+                            <p>Generate your first piece of text to see it here.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="app-footer">
+            <p><strong>Natural Language Generator &bull; Transformer-Based NLG Application</strong></p>
+        </footer>
+    </div>
+
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
